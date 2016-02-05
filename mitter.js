@@ -6,45 +6,59 @@ var appbaseRef = new Appbase({
 });
 if (Meteor.isClient) {
     var renderedTweets = new ReactiveArray();
-    var requestObject = {
-        type: 'tweets',
-        size: 20,
-        body: {
-            query: {
-                match: {
-                    tweet: {
-                        query: "",
-                        operator: "or",
-                        zero_terms_query: "all"
+    var prevRef;
+    var requestObject;
+    var prevSearchValue;
+    Template.search_box.events({
+        'keyup input, click input': function(e, template) {
+            if (prevSearchValue != e.target.value) {
+                requestObject = {
+                    type: 'tweets',
+                    size: 20,
+                    body: {
+                        query: {
+                            match: {
+                                tweet: {
+                                    query: e.target.value,
+                                    operator: "or",
+                                    zero_terms_query: "all"
+                                }
+                            }
+                        },
+                        sort: {
+                            timestamp: "desc"
+                        }
                     }
                 }
-            },
-            sort: {
-                timestamp: "desc"
+                appbaseRef.search(requestObject).on('data', function(result) {
+                    if (prevRef) {
+                        prevRef.stop()
+                        prevRef = undefined
+                    }
+                    renderedTweets.clear()
+                    result.hits.hits.map(function(object) {
+                        renderedTweets.unshift(object._source)
+                    })
+                    prevRef = appbaseRef.searchStream(requestObject).on('data', function(stream) {
+                        renderedTweets.unshift(stream._source)
+                    }).on('error', function(stream) {
+                        console.log("query error: ", stream)
+                    })
+                })
             }
+            prevSearchValue = e.target.value
         }
-    }
-    appbaseRef.search(requestObject).on('data', function(result) {
-        result.hits.hits.map(function(object) {
-            renderedTweets.unshift(object._source)
-        })
-        appbaseRef.searchStream(requestObject).on('data', function(stream) {
-            renderedTweets.unshift(stream._source)
-        }).on('error', function(stream) {
-            console.log("query error: ", stream)
-        })
     })
     Template.body.helpers({
         tweets: function() {
             return renderedTweets.list();
         }
     });
-    // This code only runs on the client
-    Template.body.helpers({
-        tweets: function() {
-            return renderedTweets.list();
-        }
-    });
+    Template.search_box.rendered = function() {
+        var input = this.find('.searchBox')
+        input.click()
+        input.focus()
+    }
 }
 
 if (Meteor.isServer) {
