@@ -49,6 +49,37 @@ if (Meteor.isClient) {
 
 if (Meteor.isServer) {
     Meteor.startup(function() {
-        // code to run on server at startup
+        var conf = JSON.parse(Assets.getText('twitter.json'));
+
+        var Twit = new TwitMaker({
+            consumer_key: conf.consumer.key,
+            consumer_secret: conf.consumer.secret,
+            access_token: conf.access_token.key,
+            access_token_secret: conf.access_token.secret
+        });
+        // filter the public stream by english tweets containing `#javascript`
+        var stream = Twit.stream('statuses/filter', {
+            track: ['#javascript', '#meteor'],
+            language: 'en'
+        })
+        stream.on('tweet', Meteor.bindEnvironment(function(tweet) {
+            var image = tweet.user.profile_image_url;
+            var user = tweet.user.screen_name;
+            var tweet = tweet.text;
+            var timestamp = tweet.timestamp_ms;
+
+            console.log(user + ' said ' + tweet);
+            console.log('=======================================')
+
+            appbaseRef.index({
+                type: 'tweets',
+                body: {
+                    user: user,
+                    tweet: tweet,
+                    picture: image,
+                    timestamp: timestamp
+                }
+            })
+        }))
     });
 }
